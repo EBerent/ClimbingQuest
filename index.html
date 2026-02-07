@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Climbing Quest: Ultimate Edition</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Titan+One&family=Nunito:wght@700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --ui-accent: #fbbf24;
+            --ui-dark: #1e293b;
+            --ui-success: #22c55e;
+            --ui-danger: #ef4444;
+        }
+        body { margin: 0; overflow: hidden; background: #38bdf8; font-family: 'Nunito', sans-serif; user-select: none; }
+        
+        #game-ui {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; display: none; flex-direction: column;
+            justify-content: space-between; padding: 30px; box-sizing: border-box;
+        }
+
+        .hud-header {
+            display: flex; justify-content: space-between; align-items: flex-start;
+            text-shadow: 2px 2px 0 rgba(0,0,0,0.3);
+        }
+        
+        .logo {
+            font-family: 'Titan One', cursive;
+            font-size: 2.8rem;
+            color: white;
+            text-shadow: 4px 4px 0 #0ea5e9;
+            line-height: 1;
+            transform: rotate(-2deg);
+        }
+        .logo span { color: var(--ui-accent); }
+
+        .stat-badge {
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(8px);
+            padding: 12px 24px;
+            border-radius: 16px;
+            border: 2px solid rgba(255,255,255,0.1);
+            color: white;
+            text-align: right;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+        }
+
+        .stamina-bar-bg {
+            width: 240px; height: 18px; background: rgba(0,0,0,0.6);
+            border-radius: 9px; margin-top: 8px; overflow: hidden;
+            border: 2px solid rgba(255,255,255,0.2);
+        }
+        .stamina-fill {
+            height: 100%; width: 100%;
+            background: linear-gradient(90deg, #facc15, #fbbf24);
+            transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 0 10px rgba(251, 191, 36, 0.5);
+        }
+
+        .controls-area {
+            display: flex; justify-content: center; align-items: flex-end;
+            padding-bottom: 20px;
+        }
+
+        .controls-hint {
+            color: white; font-size: 1rem; font-weight: 800;
+            text-shadow: 1px 1px 0 rgba(0,0,0,0.5);
+            background: rgba(15, 23, 42, 0.8); padding: 12px 24px; border-radius: 30px;
+            margin-bottom: 15px; pointer-events: auto;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .gear-panel {
+            display: flex; gap: 15px; pointer-events: auto;
+        }
+        .gear-slot {
+            width: 70px; height: 70px;
+            background: linear-gradient(135deg, #475569, #334155);
+            border: 3px solid #64748b;
+            border-radius: 16px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 32px;
+            box-shadow: 0 6px 0 #1e293b, 0 10px 10px rgba(0,0,0,0.2);
+            cursor: pointer;
+            transition: transform 0.1s, filter 0.2s;
+            position: relative;
+        }
+        .gear-slot:hover { filter: brightness(1.2); transform: translateY(-2px); }
+        .gear-slot:active { transform: translateY(4px); box-shadow: 0 0 0 #1e293b; }
+        .gear-label {
+            position: absolute; bottom: -25px; width: 100%; text-align: center;
+            font-size: 0.75rem; color: white; text-shadow: 1px 1px 0 rgba(0,0,0,0.5);
+            font-weight: 800; text-transform: uppercase;
+            pointer-events: none;
+        }
+
+        .notification {
+            position: absolute; top: 15%; left: 50%; transform: translateX(-50%);
+            background: rgba(15, 23, 42, 0.9); color: #fbbf24; padding: 15px 40px;
+            border-radius: 50px; font-weight: 900; font-size: 1.2rem;
+            opacity: 0; transition: opacity 0.3s, transform 0.3s;
+            pointer-events: none; z-index: 10;
+            border: 2px solid #fbbf24; box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        
+        #level-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.95); color: white; display: none;
+            flex-direction: column; align-items: center; justify-content: center;
+            z-index: 20; text-align: center;
+        }
+        #level-title { font-family: 'Titan One'; font-size: 4rem; color: #fbbf24; margin-bottom: 20px; text-shadow: 0 5px 0 #b45309; }
+        #level-desc { font-size: 1.5rem; margin-bottom: 40px; color: #cbd5e1; }
+
+        #sleep-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: black; pointer-events: none; opacity: 0; transition: opacity 1s;
+            z-index: 100; display: flex; align-items: center; justify-content: center;
+            color: white; font-family: 'Titan One'; font-size: 3rem;
+        }
+
+        #interact-prompt {
+            position: absolute; top: 65%; left: 50%; transform: translateX(-50%);
+            background: rgba(251, 191, 36, 0.9); color: #1e293b; padding: 12px 24px;
+            border-radius: 12px; font-weight: 900; display: none;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3); z-index: 15;
+            animation: bounce 1s infinite;
+        }
+
+        /* START SCREEN STYLES */
+        #start-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(135deg, #0ea5e9, #3b82f6);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 50; color: white; overflow-y: auto;
+        }
+        .customizer {
+            background: rgba(255,255,255,0.9); padding: 40px; border-radius: 30px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.2);
+            margin-bottom: 30px; display: grid; grid-template-columns: 1fr 1fr; gap: 25px;
+            max-width: 700px; color: #1e293b;
+        }
+        .color-option {
+            display: flex; flex-direction: column; align-items: center; font-weight: 800;
+        }
+        input[type="color"] {
+            width: 80px; height: 80px; border: none; border-radius: 50%;
+            cursor: pointer; background: none; margin-top: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        select {
+            padding: 12px 20px; border-radius: 12px; border: 2px solid #cbd5e1; margin-top: 10px;
+            font-family: 'Nunito'; font-weight: bold; cursor: pointer; font-size: 1rem;
+            background: white; width: 100%;
+        }
+        .btn-start {
+            background: #fbbf24; color: #1e293b; border: none;
+            padding: 20px 60px; border-radius: 60px; font-size: 2rem;
+            font-family: 'Titan One'; cursor: pointer; box-shadow: 0 8px 0 #b45309;
+            transition: transform 0.1s; margin-top: 20px; text-transform: uppercase;
+        }
+        .btn-start:hover { transform: scale(1.05); background: #fcd34d; }
+        .btn-start:active { transform: scale(0.95) translateY(8px); box-shadow: none; }
+
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            10% { transform: translate(-1px, -2px) rotate(-1deg); }
+            100% { transform: translate(1px, -2px) rotate(-1deg); }
+        }
+        @keyframes bounce {
+            0%, 100% { transform: translateX(-50%) translateY(0); }
+            50% { transform: translateX(-50%) translateY(-5px); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- START SCREEN / CUSTOMIZER -->
+    <div id="start-screen">
+        <div class="logo" style="font-size: 5rem; margin: 2rem 0; text-shadow: 5px 5px 0 rgba(0,0,0,0.1);">CLIMBING<br><span style="color:#fbbf24;">QUEST</span></div>
+        
+        <div class="customizer">
+            <div class="color-option"><label>Jacket Color</label><input type="color" id="color-shirt" value="#f97316"></div>
+            <div class="color-option"><label>Pants Color</label><input type="color" id="color-pants" value="#334155"></div>
+            
+            <div class="color-option">
+                <label>Body Type</label>
+                <select id="select-gender">
+                    <option value="boy">Broad</option>
+                    <option value="girl">Slim</option>
+                </select>
+            </div>
+            <div class="color-option">
+                <label>Hairstyle</label>
+                <select id="select-hair">
+                    <option value="short">Beanie & Short</option>
+                    <option value="ponytail">Ponytail</option>
+                    <option value="spiky">Spiky</option>
+                    <option value="bald">Hooded</option>
+                </select>
+            </div>
+            
+            <div class="color-option">
+                <label>Gear</label>
+                <select id="select-pack">
+                    <option value="travel">Expedition Pack</option>
+                    <option value="standard">Day Pack</option>
+                    <option value="none">No Pack</option>
+                </select>
+            </div>
+            <div class="color-option"><label>Skin Tone</label><input type="color" id="color-skin" value="#ffccaa"></div>
+        </div>
+
+        <button class="btn-start" onclick="startGame()">Start Expedition</button>
+    </div>
+
+    <!-- GAME UI -->
+    <div id="game-ui">
+        <div class="hud-header">
+            <div class="stat-badge" style="text-align:left;">
+                <div style="font-size: 0.8rem; text-transform:uppercase; letter-spacing:1px; color:#cbd5e1;">Energy</div>
+                <div class="stamina-bar-bg"><div class="stamina-fill" id="stamina-val"></div></div>
+            </div>
+            <div class="logo" style="font-size: 1.8rem;">CLIMBING<br><span>QUEST</span></div>
+            <div class="stat-badge">
+                <div style="font-size: 0.8rem; text-transform:uppercase; letter-spacing:1px; color:#cbd5e1;">Level <span id="level-val">1</span></div>
+                <div style="font-size: 1.5rem; font-family:'Titan One'; line-height:1; color:#fbbf24;"><span id="altitude-val">0</span>m</div>
+            </div>
+        </div>
+        <div class="notification" id="notif">Can't reach that!</div>
+        <div id="interact-prompt">PRESS E TO SLEEP</div>
+        <div class="controls-area">
+            <div>
+                <div class="controls-hint">WASD: Move & Climb &nbsp;•&nbsp; SPACE: Jump & Grab &nbsp;•&nbsp; E: Interact</div>
+                <div class="gear-panel">
+                    <div class="gear-slot" onclick="useRope()" title="Rappel Down">🪢<div class="gear-label">Rappel</div></div>
+                    <div class="gear-slot" onclick="placeTentFromUI()" title="Pitch Tent">⛺<div class="gear-label">Camp</div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="level-overlay">
+        <div id="level-title">SUMMIT REACHED!</div>
+        <div id="level-desc">Prepare for the next mountain...</div>
+        <div style="font-size:3rem;">🏔️ ➡️ 🏔️</div>
+    </div>
+
+    <div id="sleep-overlay">Resting...</div>
+
+<script type="module">
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.126.0/build/three.module.js';
+
+    // --- CONFIGURATION ---
+    let CONFIG = {
+        mountainHeight: 90,
+        baseRadius: 40,
+        gripCount: 800,
+        reachDistance: 12.0,
+        jumpDistance: 15.0, 
+        moveSpeed: 0.14,
+        jumpSpeed: 0.1,
+        staminaCostClimb: 1.5,
+        staminaCostJump: 10,
+        staminaRegen: 0.3,
+        camOffset: { y: 6, z: 16 }, 
+        groundY: -10,
+        gravity: 0.03
+    };
+
+    const LEVELS = [
+        { name: "Alpine Foothills", height: 70, color: 0x57534e, fog: 0xcfefff, density: 1.2, weather: 'none', hazard: 'none' },
+        { name: "Redrock Canyon", height: 90, color: 0x9a3412, fog: 0xffedd5, density: 1.0, weather: 'dust', hazard: 'moving' },
+        { name: "Frostbite Peak", height: 120, color: 0xe2e8f0, fog: 0xf1f5f9, density: 0.9, weather: 'snow', hazard: 'crumble' },
+        { name: "Obsidian Spire", height: 150, color: 0x1e293b, fog: 0x334155, density: 0.8, weather: 'ash', hazard: 'all' },
+        { name: "The World's Edge", height: 200, color: 0x0f172a, fog: 0x0f172a, density: 0.7, showOcean: true, weather: 'rain', hazard: 'all' }
+    ];
+
+    // --- STATE ---
+    let state = {
+        level: 0,
+        stamina: 100,
+        currentGrip: null,
+        isMoving: false,
+        isJumping: false,
+        isClimbing: false,
+        isRappelling: false,
+        isFalling: false,
+        isSleeping: false,
+        fallVelocity: 0,
+        isLevelTransition: false,
+        targetPos: new THREE.Vector3(),
+        startPos: new THREE.Vector3(),
+        moveProgress: 0,
+        walkTime: 0,
+        highlightedGrip: null,
+        isWalking: false,
+        gameStarted: false,
+        playerSettings: { shirt: '#f97316', pants: '#1e293b', skin: '#ffccaa', gender: 'boy', hair: 'short', pack: 'standard' },
+        keys: { up: false, down: false, left: false, right: false }
+    };
+
+    let worldObjects = {
+        mountain: null,
+        ocean: null,
+        grips: [],
+        collectibles: [],
+        tents: [],
+        animals: [],
+        trees: [],
+        clouds: [],
+        weatherParticles: []
+    };
+    
+    let camera, scene, renderer, player, selectionRing, ropeLine, debugLine;
+    let playerLimbs = { armL: null, armR: null, legL: null, legR: null };
+    let time = 0;
+
+    function init() {
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB);
+        scene.fog = new THREE.Fog(0x87CEEB, 20, 120);
+
+        camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        
+        renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        document.body.appendChild(renderer.domElement);
+
+        const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambient);
+
+        const sun = new THREE.DirectionalLight(0xfff5d6, 1.2);
+        sun.position.set(50, 80, 50);
+        sun.castShadow = true;
+        sun.shadow.mapSize.width = 2048;
+        sun.shadow.mapSize.height = 2048;
+        scene.add(sun);
+
+        createSelectionRing();
+        
+        window.addEventListener('keydown', (e) => updateKey(e.code, true));
+        window.addEventListener('keyup', (e) => updateKey(e.code, false));
+        window.addEventListener('resize', onResize);
+
+        animate();
+    }
+
+    function updateKey(code, pressed) {
+        if(code === 'ArrowUp' || code === 'KeyW') state.keys.up = pressed;
+        if(code === 'ArrowDown' || code === 'KeyS') state.keys.down = pressed;
+        if(code === 'ArrowLeft' || code === 'KeyA') state.keys.left = pressed;
+        if(code === 'ArrowRight' || code === 'KeyD') state.keys.right = pressed;
+        
+        if (pressed && code === 'Space' && !state.isMoving) {
+            if(state.isClimbing) processClimbMove(true);
+            else tryClimbStart(true);
+        }
+        
+        if(pressed && code === 'KeyE') checkTentInteract();
+    }
+
+    window.startGame = function() {
+        state.playerSettings.shirt = document.getElementById('color-shirt').value;
+        state.playerSettings.pants = document.getElementById('color-pants').value;
+        state.playerSettings.skin = document.getElementById('color-skin').value;
+        state.playerSettings.gender = document.getElementById('select-gender').value;
+        state.playerSettings.hair = document.getElementById('select-hair').value;
+        state.playerSettings.pack = document.getElementById('select-pack').value;
+
+        document.getElementById('start-screen').style.display = 'none';
+        document.getElementById('game-ui').style.display = 'flex';
+        state.gameStarted = true;
+
+        createPlayer();
+        createRope();
+        startLevel(0);
+    };
+
+    function createSelectionRing() {
+        const geo = new THREE.RingGeometry(0.4, 0.6, 32);
+        const mat = new THREE.MeshBasicMaterial({ color: 0xfbbf24, side: THREE.DoubleSide, transparent: true, opacity: 0.8, depthTest: false });
+        selectionRing = new THREE.Mesh(geo, mat);
+        selectionRing.renderOrder = 999;
+        selectionRing.visible = false;
+        scene.add(selectionRing);
+        
+        const lineMat = new THREE.LineBasicMaterial({ color: 0x22c55e });
+        const lineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+        debugLine = new THREE.Line(lineGeo, lineMat);
+        scene.add(debugLine);
+    }
+
+    function createRope() {
+        const count = 20;
+        const positions = new Float32Array(count * 3);
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        const mat = new THREE.LineBasicMaterial({ color: 0x8b4513, linewidth: 2 });
+        ropeLine = new THREE.Line(geo, mat);
+        ropeLine.userData = { points: count };
+        scene.add(ropeLine);
+    }
+
+    function startLevel(idx) {
+        state.level = idx;
+        const levelData = LEVELS[idx];
+        CONFIG.mountainHeight = levelData.height;
+        CONFIG.gripCount = Math.floor(800 * (levelData.height / 100) * levelData.density);
+        document.getElementById('level-val').innerText = idx + 1;
+        scene.background = new THREE.Color(levelData.fog);
+        scene.fog = new THREE.Fog(levelData.fog, 20, 140);
+        cleanupWorld();
+        createWorld(levelData);
+        createWeather(levelData.weather);
+        createCollectibles();
+        createAnimals();
+        
+        state.isClimbing = false;
+        state.currentGrip = null;
+        state.stamina = 100;
+        state.isLevelTransition = false;
+        document.getElementById('level-overlay').style.display = 'none';
+        
+        // Spawn
+        player.position.set(0, CONFIG.groundY + 0.1, 55); 
+        player.lookAt(0, player.position.y, 0); 
+        state.playerAngle = 0; 
+        
+        updateUI();
+        showNotification("Welcome to " + levelData.name);
+    }
+
+    function cleanupWorld() {
+        if(worldObjects.mountain) scene.remove(worldObjects.mountain);
+        if(worldObjects.ocean) scene.remove(worldObjects.ocean);
+        worldObjects.grips.forEach(g => scene.remove(g.mesh));
+        worldObjects.collectibles.forEach(c => scene.remove(c.mesh));
+        worldObjects.tents.forEach(t => scene.remove(t.mesh));
+        worldObjects.clouds.forEach(c => scene.remove(c));
+        worldObjects.weatherParticles.forEach(p => scene.remove(p));
+        worldObjects.animals.forEach(a => scene.remove(a.group));
+        worldObjects.trees.forEach(t => scene.remove(t));
+        
+        worldObjects.grips = []; worldObjects.collectibles = []; worldObjects.tents = []; 
+        worldObjects.clouds = []; worldObjects.weatherParticles = []; worldObjects.animals = []; worldObjects.trees = [];
+    }
+
+    function createWorld(levelData) {
+        if (levelData.showOcean) {
+            const waterGeo = new THREE.PlaneGeometry(800, 800);
+            const waterMat = new THREE.MeshPhongMaterial({ color: 0x3b82f6, shininess: 80 }); 
+            const ocean = new THREE.Mesh(waterGeo, waterMat);
+            ocean.rotation.x = -Math.PI / 2;
+            ocean.position.y = CONFIG.groundY;
+            scene.add(ocean);
+            worldObjects.ocean = ocean;
+        } else {
+            const groundGeo = new THREE.PlaneGeometry(800, 800);
+            const groundMat = new THREE.MeshStandardMaterial({ color: 0x57534e }); 
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.position.y = CONFIG.groundY;
+            scene.add(ground);
+            worldObjects.ocean = ground;
+        }
+
+        const mountainGeo = new THREE.ConeGeometry(CONFIG.baseRadius, CONFIG.mountainHeight, 64, 40);
+        const posAttr = mountainGeo.attributes.position;
+        for (let i = 0; i < posAttr.count; i++) {
+            const y = posAttr.getY(i);
+            if (y > -CONFIG.mountainHeight/2 + 2) { 
+                const amp = 3.5;
+                const noise = Math.sin(posAttr.getX(i)*0.5) * Math.cos(posAttr.getZ(i)*0.5); 
+                posAttr.setX(i, posAttr.getX(i) + (Math.random() - 0.5 + noise) * amp);
+                posAttr.setZ(i, posAttr.getZ(i) + (Math.random() - 0.5 + noise) * amp);
+            }
+        }
+        mountainGeo.computeVertexNormals();
+        const mountainMat = new THREE.MeshStandardMaterial({ color: levelData.color, flatShading: true, side: THREE.DoubleSide });
+        worldObjects.mountain = new THREE.Mesh(mountainGeo, mountainMat);
+        worldObjects.mountain.position.y = CONFIG.mountainHeight/2 + CONFIG.groundY; 
+        worldObjects.mountain.receiveShadow = true;
+        scene.add(worldObjects.mountain);
+
+        function addGrip(x, y, z, isStart = false) {
+            let type = 'normal', color = isStart ? 0xffd700 : 0x475569;
+            if(!isStart && y > CONFIG.groundY + 15) {
+                const rand = Math.random();
+                if(rand > 0.85 && (levelData.hazard === 'crumble' || levelData.hazard === 'all')) { type = 'crumble'; color = 0xef4444; }
+                else if (rand > 0.7 && rand <= 0.85 && (levelData.hazard === 'moving' || levelData.hazard === 'all')) { type = 'moving'; color = 0x22c55e; }
+            }
+            const mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(0.5), new THREE.MeshStandardMaterial({ color }));
+            mesh.position.set(x, y, z);
+            mesh.lookAt(0, y, 0);
+            scene.add(mesh);
+            worldObjects.grips.push({ mesh, pos: mesh.position.clone(), type, angleOffset: Math.random() * Math.PI * 2 });
+        }
+
+        for(let i=0; i<90; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const yJitter = Math.random() * 2.5 + 3.0; 
+            const rJitter = CONFIG.baseRadius + 0.5 + Math.random() * 2.0;
+            addGrip(Math.sin(angle)*rJitter, CONFIG.groundY + yJitter, Math.cos(angle)*rJitter, true);
+        }
+
+        for(let i=0; i<CONFIG.gripCount; i++) {
+            const y = Math.random() * CONFIG.mountainHeight + CONFIG.groundY + 4; 
+            const progress = (y - CONFIG.groundY) / CONFIG.mountainHeight;
+            const r = CONFIG.baseRadius * (1 - progress) + (Math.random()*1.8); 
+            const theta = Math.random() * Math.PI * 2;
+            addGrip(r * Math.sin(theta), y, r * Math.cos(theta));
+        }
+
+        for(let i=0; i<15; i++) {
+            const cloud = new THREE.Mesh(new THREE.DodecahedronGeometry(4), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 }));
+            cloud.position.set((Math.random()-0.5)*150, 20 + Math.random()*100, (Math.random()-0.5)*80 + 20);
+            scene.add(cloud);
+            worldObjects.clouds.push(cloud);
+        }
+    }
+
+    function createAnimals() {
+        const geo = new THREE.BoxGeometry(0.4, 0.4, 0.6);
+        const earGeo = new THREE.BoxGeometry(0.1, 0.3, 0.1);
+        const mat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+        
+        for(let i=0; i<10; i++) {
+            const group = new THREE.Group();
+            const body = new THREE.Mesh(geo, mat); body.castShadow = true; group.add(body);
+            const earL = new THREE.Mesh(earGeo, mat); earL.position.set(-0.1, 0.3, 0.2); group.add(earL);
+            const earR = new THREE.Mesh(earGeo, mat); earR.position.set(0.1, 0.3, 0.2); group.add(earR);
+            const angle = Math.random() * Math.PI * 2;
+            const r = 40 + Math.random() * 15;
+            group.position.set(Math.sin(angle)*r, CONFIG.groundY + 0.2, Math.cos(angle)*r);
+            scene.add(group);
+            worldObjects.animals.push({ group, dest: group.position.clone(), wait: 0 });
+        }
+    }
+
+    function createCollectibles() {
+        for(let i=0; i<25; i++) {
+            const type = Math.random() > 0.5 ? 'apple' : 'banana';
+            const mesh = new THREE.Mesh(
+                type === 'apple' ? new THREE.SphereGeometry(0.4, 8, 8) : new THREE.CylinderGeometry(0.1, 0.1, 0.8, 8),
+                new THREE.MeshStandardMaterial({ color: type === 'apple' ? 0xff0000 : 0xffff00 })
+            );
+            const y = Math.random() * (CONFIG.mountainHeight - 15) + CONFIG.groundY + 8;
+            const r = CONFIG.baseRadius * (1 - (y-CONFIG.groundY)/CONFIG.mountainHeight) + 1.5;
+            const theta = Math.random() * Math.PI * 2;
+            mesh.position.set(r * Math.sin(theta), y, r * Math.cos(theta));
+            scene.add(mesh);
+            worldObjects.collectibles.push({ mesh, type, active: true });
+        }
+    }
+
+    function createPlayer() {
+        if(player) scene.remove(player);
+
+        player = new THREE.Group();
+        const s = state.playerSettings;
+        const skinMat = new THREE.MeshStandardMaterial({ color: s.skin });
+        const shirtMat = new THREE.MeshStandardMaterial({ color: s.shirt });
+        const pantsMat = new THREE.MeshStandardMaterial({ color: s.pants });
+        const darkMat = new THREE.MeshStandardMaterial({ color: 0x111827 });
+
+        const bodyW = s.gender === 'boy' ? 0.6 : 0.5;
+        const bodyD = s.gender === 'boy' ? 0.4 : 0.35;
+        const body = new THREE.Mesh(new THREE.BoxGeometry(bodyW, 0.9, bodyD), shirtMat);
+        body.position.y = 0.7; body.castShadow = true; player.add(body);
+        
+        const belt = new THREE.Mesh(new THREE.BoxGeometry(bodyW+0.02, 0.1, bodyD+0.02), darkMat);
+        belt.position.y = 0.3; player.add(belt);
+
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.45, 0.45), skinMat);
+        head.position.y = 1.4;
+        // Inverted Z for eyes since model faces -Z
+        const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.05), darkMat);
+        eyeL.position.set(0.1, 0.05, -0.23); head.add(eyeL);
+        const eyeR = eyeL.clone(); eyeR.position.set(-0.1, 0.05, -0.23); head.add(eyeR);
+        
+        if (s.hair !== 'bald') {
+            const hairColor = new THREE.MeshStandardMaterial({ color: 0x3f3f46 });
+            let hairGeo;
+            if (s.hair === 'short') hairGeo = new THREE.BoxGeometry(0.42, 0.15, 0.47);
+            else if (s.hair === 'spiky') hairGeo = new THREE.ConeGeometry(0.25, 0.4, 4);
+            else hairGeo = new THREE.BoxGeometry(0.42, 0.4, 0.47);
+            const hair = new THREE.Mesh(hairGeo, hairColor);
+            hair.position.y = s.hair === 'spiky' ? 0.4 : 0.25; head.add(hair);
+            if (s.hair === 'ponytail') {
+                const tail = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.4, 0.15), hairColor);
+                tail.position.set(0, 0, 0.3); head.add(tail); // Ponytail at back (+Z)
+            }
+        }
+        player.add(head);
+
+        if (s.pack !== 'none') {
+            const packH = s.pack === 'travel' ? 0.9 : 0.7;
+            const packD = s.pack === 'travel' ? 0.35 : 0.2;
+            const pack = new THREE.Mesh(new THREE.BoxGeometry(0.5, packH, packD), new THREE.MeshStandardMaterial({ color: 0x0369a1 }));
+            pack.position.set(0, 0.7, 0.3 + (packD/2)); // On back (+Z)
+            player.add(pack);
+        }
+
+        function mkLimb(w, h, d, mat, x, y, z, isArm) {
+            const g = new THREE.Group();
+            const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+            m.position.y = -h/2; m.castShadow = true; g.add(m);
+            const end = new THREE.Mesh(new THREE.BoxGeometry(w+0.05, 0.15, d+0.05), darkMat);
+            end.position.y = -h; if (!isArm) end.position.z = -0.05; // Toes forward (-Z)
+            g.add(end); g.position.set(x, y, z);
+            return g;
+        }
+
+        const limbW = s.gender === 'boy' ? 0.2 : 0.15;
+        // Inverted X offsets because player faces -Z
+        playerLimbs.armL = mkLimb(limbW, 0.7, 0.2, shirtMat, bodyW/2 + limbW/2, 1.1, 0, true);
+        playerLimbs.armR = mkLimb(limbW, 0.7, 0.2, shirtMat, -bodyW/2 - limbW/2, 1.1, 0, true);
+        playerLimbs.legL = mkLimb(0.22, 0.7, 0.25, pantsMat, 0.15, 0.3, 0, false);
+        playerLimbs.legR = mkLimb(0.22, 0.7, 0.25, pantsMat, -0.15, 0.3, 0, false);
+        player.add(playerLimbs.armL); player.add(playerLimbs.armR);
+        player.add(playerLimbs.legL); player.add(playerLimbs.legR);
+        scene.add(player);
+    }
+
+    function createWeather(type) {
+        if(type === 'none') return;
+        const count = 300, geo = new THREE.BufferGeometry(), pos = [];
+        for(let i=0; i<count; i++) pos.push((Math.random()-0.5)*120, Math.random()*100, (Math.random()-0.5)*120);
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+        const color = type === 'ash' ? 0xff4400 : (type === 'rain' ? 0x88ccff : 0xffffff);
+        const sys = new THREE.Points(geo, new THREE.PointsMaterial({ color, size: 0.4, transparent: true }));
+        sys.position.y = CONFIG.groundY;
+        scene.add(sys);
+        worldObjects.weatherParticles.push({ mesh: sys, type });
+    }
+
+    // --- GAME LOOP ---
+
+    function smoothGroundMovement() {
+        if (!state.isClimbing && !state.isMoving && !state.isSleeping && !state.isFalling) {
+            const moveSpeed = 0.2; 
+            const rotSpeed = 0.08;
+            let moving = false;
+
+            // Forward is -Z (Into screen). Back is +Z.
+            if (state.keys.up) { player.translateZ(-moveSpeed); moving = true; } 
+            if (state.keys.down) { player.translateZ(moveSpeed); moving = true; }
+            if (state.keys.left) { player.rotateY(rotSpeed); moving = true; }
+            if (state.keys.right) { player.rotateY(-rotSpeed); moving = true; }
+
+            state.isWalking = moving;
+            if (moving) {
+                state.walkTime += 0.2;
+                animateLimbsGround(state.walkTime);
+                
+                const distToCenter = Math.sqrt(player.position.x**2 + player.position.z**2);
+                if (distToCenter < CONFIG.baseRadius + 2) {
+                    // Simple bounce back
+                    const angle = Math.atan2(player.position.x, player.position.z);
+                    player.position.x = Math.sin(angle) * (CONFIG.baseRadius + 2);
+                    player.position.z = Math.cos(angle) * (CONFIG.baseRadius + 2);
+                }
+            } else {
+                playerLimbs.armL.rotation.x = THREE.MathUtils.lerp(playerLimbs.armL.rotation.x, 0, 0.1);
+                playerLimbs.armR.rotation.x = THREE.MathUtils.lerp(playerLimbs.armR.rotation.x, 0, 0.1);
+                playerLimbs.legL.rotation.x = THREE.MathUtils.lerp(playerLimbs.legL.rotation.x, 0, 0.1);
+                playerLimbs.legR.rotation.x = THREE.MathUtils.lerp(playerLimbs.legR.rotation.x, 0, 0.1);
+            }
+        }
+    }
+
+    function processClimbMove(isJump) {
+        if (state.stamina <= 0) return;
+        
+        let bestGrip = null;
+        let minDist = Infinity;
+        let bestScore = -Infinity;
+        
+        const limit = isJump ? CONFIG.jumpDistance : CONFIG.reachDistance;
+        const currentPos = state.currentGrip ? state.currentGrip.pos : player.position;
+        
+        let dx = 0, dy = 0;
+        if (state.keys.up) dy = 1;
+        if (state.keys.down) dy = -1;
+        if (state.keys.left) dx = -1; // Inverted: Left key moves opposite to tangent
+        if (state.keys.right) dx = 1; // Inverted: Right key moves with tangent
+        
+        if (dx === 0 && dy === 0 && !isJump) return;
+        if (isJump && dx === 0 && dy === 0) dy = 1;
+
+        const toCenter = currentPos.clone().setY(0).normalize(); 
+        const tangentRight = new THREE.Vector3().crossVectors(new THREE.Vector3(0,1,0), toCenter).normalize();
+        const moveVec = new THREE.Vector3(0, dy, 0); 
+        moveVec.add(tangentRight.multiplyScalar(dx)); 
+        moveVec.normalize();
+
+        worldObjects.grips.forEach(g => {
+            if (g === state.currentGrip) return;
+            const dist = g.pos.distanceTo(currentPos);
+            if (dist > limit) return; 
+            const dirToGrip = g.pos.clone().sub(currentPos).normalize();
+            const alignment = dirToGrip.dot(moveVec);
+            const score = alignment * 10 - dist * 0.5;
+            if (alignment > 0.3) {
+                if (score > bestScore) { bestScore = score; bestGrip = g; }
+            }
+        });
+
+        if (bestGrip) {
+            initiateMove(bestGrip, isJump, isJump ? CONFIG.staminaCostJump : CONFIG.staminaCostClimb);
+        } else {
+            if (isJump) showNotification("Jump blocked!");
+            else showNotification("Can't reach!");
+        }
+    }
+
+    function animateLimbsGround(t) {
+        const s = Math.sin(t) * 0.6;
+        // Inverted for -Z forward
+        playerLimbs.armL.rotation.x = -s; playerLimbs.armR.rotation.x = s; 
+        playerLimbs.legL.rotation.x = s; playerLimbs.legR.rotation.x = -s;
+        player.position.y = CONFIG.groundY + 0.1 + Math.abs(Math.sin(t)) * 0.15;
+    }
+
+    function animateLimbsClimb(progress, isJump) {
+        const s = Math.sin(progress * Math.PI * 4) * (isJump ? 1.5 : 1.0);
+        playerLimbs.armL.rotation.x = Math.PI + s; playerLimbs.armR.rotation.x = Math.PI - s;
+        playerLimbs.legL.rotation.x = -s * 0.5; playerLimbs.legR.rotation.x = s * 0.5;
+    }
+
+    function updateSelectionRing() {
+        if (!player || state.isClimbing || state.isMoving || state.isRappelling || state.isFalling) { 
+            if(selectionRing) selectionRing.visible = false; 
+            if(debugLine) debugLine.visible = false;
+            return; 
+        }
+        
+        const reachOrigin = player.position.clone().add(new THREE.Vector3(0, 1.5, 0));
+        let best = null, minDist = Infinity;
+        
+        worldObjects.grips.forEach(g => {
+            if (g.pos.y > CONFIG.groundY && g.pos.y < CONFIG.groundY + 12) {
+                const d = g.pos.distanceTo(reachOrigin);
+                if (d < CONFIG.reachDistance && d < minDist) { minDist = d; best = g; }
+            }
+        });
+        
+        state.highlightedGrip = best;
+        if (best) {
+            selectionRing.visible = true; 
+            selectionRing.position.copy(best.pos).add(new THREE.Vector3(0,0,0.2));
+            const center = new THREE.Vector3(0, best.pos.y, 0);
+            selectionRing.lookAt(center); 
+            debugLine.visible = true;
+            const positions = debugLine.geometry.attributes.position.array;
+            positions[0] = reachOrigin.x; positions[1] = reachOrigin.y; positions[2] = reachOrigin.z;
+            positions[3] = best.pos.x; positions[4] = best.pos.y; positions[5] = best.pos.z;
+            debugLine.geometry.attributes.position.needsUpdate = true;
+        } else { 
+            selectionRing.visible = false; 
+            debugLine.visible = false;
+        }
+    }
+
+    function tryClimbStart(isJump) {
+        if (state.highlightedGrip) {
+            initiateMove(state.highlightedGrip, isJump, 0);
+            state.isClimbing = true; showNotification("Climb Started!");
+        } else {
+            showNotification("Too far / Look up!");
+        }
+    }
+
+    function dropToGround() {
+        state.isClimbing = false; state.currentGrip = null; state.isMoving = false;
+        player.position.y = CONFIG.groundY + 0.1;
+        player.lookAt(player.position.clone().add(new THREE.Vector3(0,0,-1))); // Look Forward (-Z)
+        showNotification("Back on ground");
+    }
+
+    function initiateMove(targetGrip, isJump, cost) {
+        state.isMoving = true; state.isJumping = isJump; state.moveProgress = 0;
+        state.startPos.copy(player.position);
+        // Face -Z to wall
+        const normal = targetGrip.pos.clone().setY(0).normalize();
+        const offset = normal.multiplyScalar(0.7);
+        state.targetPos.copy(targetGrip.pos).add(offset);
+        state.nextGripRef = targetGrip; state.stamina -= cost; updateUI();
+        if (targetGrip.type === 'crumble') setTimeout(() => {
+            if (state.currentGrip === targetGrip) { state.isFalling = true; state.isClimbing = false; state.currentGrip = null; targetGrip.mesh.visible = false; showNotification("Crumble!"); }
+        }, 1500);
+    }
+
+    function initiateFall(direction) {
+        state.isClimbing = false; state.currentGrip = null; state.isMoving = false; state.isFalling = true;
+        state.fallVelocity = 0.4; state.targetPos.copy(direction).sub(player.position).normalize().multiplyScalar(0.25);
+    }
+
+    function checkTentInteract() {
+        if(!player) return;
+        document.getElementById('interact-prompt').style.display = 'none';
+        let nearTent = false;
+        worldObjects.tents.forEach(t => {
+            if(t.mesh.position.distanceTo(player.position) < 5.0) nearTent = true;
+        });
+        
+        if (nearTent) {
+            state.isSleeping = true;
+            document.getElementById('sleep-overlay').style.opacity = 1;
+            setTimeout(() => {
+                state.stamina = 100; updateUI();
+                document.getElementById('sleep-overlay').style.opacity = 0;
+                state.isSleeping = false;
+                showNotification("Well rested!");
+            }, 2000);
+        }
+    }
+
+    function keepPlayerOutsideMountain() {
+        if(!player) return;
+        const alt = player.position.y - CONFIG.groundY;
+        const progress = Math.max(0, Math.min(1, alt / CONFIG.mountainHeight));
+        const collisionRadius = (CONFIG.baseRadius * (1 - progress)) + 5.0; 
+        const distFromCenter = Math.sqrt(player.position.x**2 + player.position.z**2);
+        if (distFromCenter < collisionRadius) {
+            const angle = Math.atan2(player.position.x, player.position.z);
+            player.position.x = Math.sin(angle) * collisionRadius;
+            player.position.z = Math.cos(angle) * collisionRadius;
+        }
+    }
+
+    function updateRopePhysics() {
+        if (!ropeLine || !ropeLine.visible || !state.currentGrip || !player) {
+            if(ropeLine) ropeLine.visible = false;
+            return;
+        }
+        
+        ropeLine.visible = true;
+        const positions = ropeLine.geometry.attributes.position.array;
+        const segments = 20;
+        const peak = new THREE.Vector3(0, CONFIG.mountainHeight + CONFIG.groundY, 0);
+        // Player back is +Z relative to player.
+        // Get world pos of back
+        const playerBack = player.position.clone().add(new THREE.Vector3(0, 0.7, 0));
+        // Push slightly back along player forward vector (-Z) reversed (+Z)
+        const backDir = new THREE.Vector3(0,0,1).applyQuaternion(player.quaternion);
+        playerBack.add(backDir.multiplyScalar(0.3));
+
+        for (let i = 0; i < segments; i++) {
+            const t = i / (segments - 1);
+            const p = new THREE.Vector3().lerpVectors(peak, playerBack, t);
+            const h = p.y - CONFIG.groundY;
+            const progress = Math.max(0, h / CONFIG.mountainHeight);
+            const r = (CONFIG.baseRadius * (1 - progress)) + 0.1;
+            const d = Math.sqrt(p.x*p.x + p.z*p.z);
+            if (d < r) {
+                const angle = Math.atan2(p.x, p.z);
+                p.x = Math.sin(angle) * r;
+                p.z = Math.cos(angle) * r;
+            }
+            positions[i*3] = p.x;
+            positions[i*3+1] = p.y;
+            positions[i*3+2] = p.z;
+        }
+        ropeLine.geometry.attributes.position.needsUpdate = true;
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        time += 0.01;
+        updateSelectionRing();
+
+        if (state.gameStarted && player) {
+            smoothGroundMovement();
+            if(state.isClimbing && !state.isMoving && (state.keys.up || state.keys.down || state.keys.left || state.keys.right)) {
+                if (!state.moveDebounce) {
+                    processClimbMove(false);
+                    state.moveDebounce = true;
+                    setTimeout(() => state.moveDebounce = false, 200);
+                }
+            }
+        }
+
+        if (!state.isMoving && !state.isFalling && state.stamina < 100) { state.stamina = Math.min(100, state.stamina + CONFIG.staminaRegen); updateUI(); }
+        
+        // --- ANIMALS ---
+        worldObjects.animals.forEach(a => {
+            if (a.wait > 0) {
+                a.wait--;
+            } else {
+                if (a.group.position.distanceTo(a.dest) < 0.5) {
+                    a.wait = 100 + Math.random() * 200;
+                    const angle = Math.random() * Math.PI * 2;
+                    const r = 40 + Math.random() * 20;
+                    a.dest.set(Math.sin(angle)*r, CONFIG.groundY + 0.2, Math.cos(angle)*r);
+                    a.group.lookAt(a.dest);
+                } else {
+                    const dir = a.dest.clone().sub(a.group.position).normalize().multiplyScalar(0.05);
+                    a.group.position.add(dir);
+                    a.group.position.y = CONFIG.groundY + 0.2 + Math.abs(Math.sin(time*10)) * 0.2; 
+                }
+            }
+        });
+
+        // --- ROPE ---
+        updateRopePhysics();
+
+        // --- TENT PROMPT ---
+        let nearTent = false;
+        if (!state.isClimbing && player) {
+            worldObjects.tents.forEach(t => {
+                if(t.mesh.position.distanceTo(player.position) < 5.0) nearTent = true;
+            });
+        }
+        const prompt = document.getElementById('interact-prompt');
+        if(nearTent) { prompt.style.display = 'block'; prompt.innerText = "PRESS E TO SLEEP"; }
+        else prompt.style.display = 'none';
+
+        if (state.isFalling) {
+            state.fallVelocity -= CONFIG.gravity; player.position.y += state.fallVelocity; player.position.add(state.targetPos);
+            const rot = Math.sin(time*12); playerLimbs.armL.rotation.x = rot; playerLimbs.armR.rotation.x = -rot;
+            if (player.position.y <= CONFIG.groundY + 0.1) { player.position.y = CONFIG.groundY + 0.1; state.isFalling = false; state.stamina = 40; showNotification("Fell!"); }
+        } else if (state.isRappelling) {
+            player.position.y -= 0.7;
+            const theta = Math.atan2(player.position.x, player.position.z);
+            const progress = (player.position.y - CONFIG.groundY) / CONFIG.mountainHeight;
+            const r = CONFIG.baseRadius * (1 - progress) + 3.0; // wider Rappel
+            player.position.x = Math.sin(theta) * r; player.position.z = Math.cos(theta) * r;
+            // Face wall
+            const center = new THREE.Vector3(0, player.position.y, 0);
+            player.lookAt(center);
+            
+            if (player.position.y <= CONFIG.groundY + 0.1) { player.position.y = CONFIG.groundY + 0.1; state.isRappelling = false; state.isClimbing = false; state.stamina = 100; showNotification("Safe."); }
+        } else if (state.isMoving) {
+            state.moveProgress += state.isJumping ? CONFIG.jumpSpeed : CONFIG.moveSpeed;
+            animateLimbsClimb(state.moveProgress, state.isJumping);
+            if (state.moveProgress >= 1) { 
+                state.moveProgress = 1; state.isMoving = false; state.currentGrip = state.nextGripRef; 
+                playerLimbs.armL.rotation.x = playerLimbs.armR.rotation.x = 0;
+            }
+            const newPos = new THREE.Vector3().lerpVectors(state.startPos, state.targetPos, state.moveProgress);
+            newPos.y += Math.sin(state.moveProgress * Math.PI) * (state.isJumping ? 3.5 : 0.6);
+            player.position.copy(newPos); 
+            
+            // Fix rotation: Look AWAY from center to face wall (if model faces +Z?)
+            // Or look AT center if model faces -Z.
+            // User requested inversion from previous state (which was looking at 0,y,0).
+            // New target: Point Outward from center.
+            const center = new THREE.Vector3(0, newPos.y, 0);
+            const outward = newPos.clone().sub(center).normalize().multiplyScalar(10).add(newPos);
+            player.lookAt(outward);
+            
+            checkFood(newPos);
+        } else if (state.isClimbing && state.currentGrip) {
+            const offset = state.currentGrip.pos.clone().setY(0).normalize().multiplyScalar(0.6);
+            player.position.copy(state.currentGrip.pos).add(offset); 
+            
+            // Fix rotation: Look AWAY from center
+            const center = new THREE.Vector3(0, player.position.y, 0);
+            const outward = player.position.clone().sub(center).normalize().multiplyScalar(10).add(player.position);
+            player.lookAt(outward);
+            
+            if (player.position.y - CONFIG.groundY > CONFIG.mountainHeight - 4 && !state.isLevelTransition) finishLevel();
+        }
+
+        if (state.isFalling || state.isRappelling) keepPlayerOutsideMountain();
+
+        updateEnvironment();
+        if (player) {
+            const targetPos = player.position.clone();
+            targetPos.y += 2;
+            const idealOffset = new THREE.Vector3(0, CONFIG.camOffset.y, CONFIG.camOffset.z);
+            if (state.isClimbing) {
+                const angle = Math.atan2(player.position.x, player.position.z);
+                // Camera behind player (Outward)
+                idealOffset.set(Math.sin(angle) * 12, 4, Math.cos(angle) * 12);
+            } else {
+                // Free cam follows player rotation
+                const back = new THREE.Vector3(0, 6, 12).applyQuaternion(player.quaternion);
+                idealOffset.copy(back);
+            }
+            const desiredCamPos = player.position.clone().add(idealOffset);
+            camera.position.lerp(desiredCamPos, 0.05);
+            camera.lookAt(targetPos);
+        }
+        renderer.render(scene, camera);
+    }
+
+    function updateEnvironment() {
+        worldObjects.grips.forEach(g => { if(g.type === 'moving') g.mesh.position.y = g.pos.y + Math.sin(time + g.angleOffset) * 2.0; g.pos.y = g.mesh.position.y; });
+        worldObjects.weatherParticles.forEach(sys => {
+            const arr = sys.mesh.geometry.attributes.position.array;
+            for(let i=1; i<arr.length; i+=3) { arr[i] -= 0.2; if(arr[i] < 0) arr[i] = 100; }
+            sys.mesh.geometry.attributes.position.needsUpdate = true;
+        });
+    }
+
+    function checkFood(pos) {
+        worldObjects.collectibles.forEach(c => {
+            if (c.active && c.mesh.position.distanceTo(pos) < 2.0) { c.active = false; c.mesh.visible = false; state.stamina = Math.min(100, state.stamina + 25); showNotification(c.type + " found!"); }
+        });
+    }
+
+    function finishLevel() {
+        state.isLevelTransition = true;
+        document.getElementById('level-overlay').style.display = 'flex';
+        if (state.level < LEVELS.length - 1) setTimeout(() => startLevel(state.level + 1), 3000);
+        else document.getElementById('level-title').innerText = "THE SEA REACHED!";
+    }
+
+    function updateUI() {
+        const bar = document.getElementById('stamina-val');
+        bar.style.width = state.stamina + '%';
+        bar.style.background = state.stamina < 30 ? '#ef4444' : 'linear-gradient(90deg, #a3e635, #4ade80)';
+        document.getElementById('altitude-val').innerText = Math.max(0, Math.floor(player.position.y - CONFIG.groundY));
+    }
+
+    function showNotification(text) {
+        const el = document.getElementById('notif'); el.innerText = text; el.style.opacity = 1;
+        setTimeout(() => el.style.opacity = 0, 1500);
+    }
+
+    window.useRope = function() {
+        if(!state.isClimbing || state.isMoving) return;
+        state.isRappelling = true; showNotification("Rappelling...");
+    };
+
+    window.placeTentFromUI = function() {
+        if(state.isClimbing || state.isMoving) return;
+        const tent = new THREE.Mesh(new THREE.ConeGeometry(2.5, 3.5, 4), new THREE.MeshStandardMaterial({ color: 0xef4444 }));
+        tent.position.copy(player.position); tent.lookAt(0, player.position.y, 0);
+        scene.add(tent); 
+        worldObjects.tents.push({ mesh: tent }); 
+        state.stamina = 100; updateUI(); showNotification("Camp set!");
+    };
+
+    function onResize() { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); }
+
+    init();
+</script>
+</body>
+</html>
